@@ -27,6 +27,12 @@ namespace OptiscalerClient.Views
 {
     public partial class WelcomeWindow : Window
     {
+        public WelcomeWindow()
+        {
+            InitializeComponent();
+            DialogDimHelper.Register(this);
+        }
+
         public WelcomeWindow(Window owner)
         {
             InitializeComponent();

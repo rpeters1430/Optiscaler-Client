@@ -467,10 +467,10 @@ namespace OptiscalerClient.Services
             _cachedBetaVersions = new System.Collections.Generic.HashSet<string>(
                 betasList.Select(r => r.Version), StringComparer.OrdinalIgnoreCase);
 
-            _cachedLatestBetaVersion = all.FirstOrDefault(r => r.IsLatestBeta)?.Version
+            _cachedLatestBetaVersion = betasList.FirstOrDefault(r => r.IsLatestBeta)?.Version
                 ?? betasList.FirstOrDefault()?.Version;
 
-            _cachedLatestStableVersion = all.FirstOrDefault(r => r.IsLatestStable)?.Version
+            _cachedLatestStableVersion = stablesList.FirstOrDefault(r => r.IsLatestStable)?.Version
                 ?? stablesList.FirstOrDefault()?.Version;
 
             // Stable versions first (highest to lowest), then betas (highest to lowest)
@@ -645,7 +645,13 @@ namespace OptiscalerClient.Services
 
                         var stableEntries = await optiVersionsTask;
                         var betaEntries = await optiBetasTask;
-                        var allNewEntries = stableEntries.Concat(betaEntries).ToList();
+                        var pinnedBetaEntries = GetPinnedOptiScalerBetaEntries();
+                        if (pinnedBetaEntries.Count > 0)
+                        {
+                            foreach (var betaEntry in betaEntries)
+                                betaEntry.IsLatestBeta = false;
+                        }
+                        var allNewEntries = stableEntries.Concat(betaEntries).Concat(pinnedBetaEntries).ToList();
 
                         if (allNewEntries.Count > 0)
                         {
@@ -777,6 +783,34 @@ namespace OptiscalerClient.Services
             {
                 _checkSemaphore.Release();
             }
+        }
+
+        private System.Collections.Generic.List<OptiScalerReleaseEntry> GetPinnedOptiScalerBetaEntries()
+        {
+            var entries = new System.Collections.Generic.List<OptiScalerReleaseEntry>();
+            var seen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            bool latestMarked = false;
+
+            foreach (var pinned in _config.PinnedOptiScalerBetaReleases)
+            {
+                if (string.IsNullOrWhiteSpace(pinned.Version) ||
+                    string.IsNullOrWhiteSpace(pinned.DownloadUrl) ||
+                    !seen.Add(pinned.Version))
+                {
+                    continue;
+                }
+
+                entries.Add(new OptiScalerReleaseEntry
+                {
+                    Version = pinned.Version.Trim(),
+                    DownloadUrl = pinned.DownloadUrl.Trim(),
+                    IsBeta = true,
+                    IsLatestBeta = !latestMarked,
+                });
+                latestMarked = true;
+            }
+
+            return entries;
         }
 
         private async Task<string?> CheckComponentUpdateAsync(string componentName, RepositoryConfig config)
@@ -1133,7 +1167,7 @@ namespace OptiscalerClient.Services
                 DebugWindow.Log($"[ExtrasDownload] Extracting from {Path.GetFileName(tempZip)}");
                 await Task.Run(() =>
                 {
-                    using var archive = SharpCompress.Archives.ArchiveFactory.Open(tempZip);
+                    using var archive = SharpCompress.Archives.ArchiveFactory.OpenArchive(tempZip, new SharpCompress.Readers.ReaderOptions());
                     foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                     {
                         if (Path.GetFileName(entry.Key ?? "").Equals("amd_fidelityfx_upscaler_dx12.dll",
@@ -1457,7 +1491,7 @@ namespace OptiscalerClient.Services
 
                 await Task.Run(() =>
                 {
-                    using var archive = ArchiveFactory.Open(tempFile);
+                    using var archive = ArchiveFactory.OpenArchive(tempFile, new SharpCompress.Readers.ReaderOptions());
                     foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                     {
                         var destPath = SafeDestinationPath(cacheDir, entry.Key ?? string.Empty);
@@ -1899,7 +1933,7 @@ namespace OptiscalerClient.Services
 
                     await Task.Run(() =>
                     {
-                        using var archive = ArchiveFactory.Open(tempZip);
+                        using var archive = ArchiveFactory.OpenArchive(tempZip, new SharpCompress.Readers.ReaderOptions());
                         var entries = archive.Entries.Where(e => !e.IsDirectory).ToList();
                         foreach (var entry in entries)
                         {
@@ -2079,7 +2113,7 @@ namespace OptiscalerClient.Services
 
                     await Task.Run(() =>
                     {
-                        using var archive = ArchiveFactory.Open(tempZip);
+                        using var archive = ArchiveFactory.OpenArchive(tempZip, new SharpCompress.Readers.ReaderOptions());
                         foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                         {
                             var destPath = SafeDestinationPath(extractPath, entry.Key ?? string.Empty);
@@ -2198,7 +2232,7 @@ namespace OptiscalerClient.Services
                 await Task.Run(() =>
                 {
                     using var stream = File.OpenRead(archivePath);
-                    using var archive = SharpCompress.Archives.ArchiveFactory.Open(stream);
+                    using var archive = SharpCompress.Archives.ArchiveFactory.OpenArchive(stream, new SharpCompress.Readers.ReaderOptions());
                     var fileEntries = archive.Entries.Where(e => !e.IsDirectory).ToList();
                     var commonPrefix = FindCommonArchivePrefix(fileEntries.Select(e => e.Key).ToList());
 
@@ -2414,7 +2448,7 @@ namespace OptiscalerClient.Services
             {
                 await Task.Run(() =>
                 {
-                    using var archive = SharpCompress.Archives.ArchiveFactory.Open(archivePath);
+                    using var archive = SharpCompress.Archives.ArchiveFactory.OpenArchive(archivePath, new SharpCompress.Readers.ReaderOptions());
                     foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                     {
                         entry.WriteToDirectory(tempExtractDir, new SharpCompress.Common.ExtractionOptions

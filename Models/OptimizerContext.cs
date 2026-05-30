@@ -7,10 +7,15 @@ namespace OptiscalerClient.Models
     /// Source generator for JSON serialization to support high-performance trimming.
     /// This allows the compiler to remove unused reflection code, significantly reducing binary size.
     /// </summary>
-    [JsonSourceGenerationOptions(WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonSourceGenerationOptions(
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals)]
     [JsonSerializable(typeof(AppConfiguration))]
     [JsonSerializable(typeof(NetworkConfig))]
     [JsonSerializable(typeof(ScanSourcesConfig))]
+    [JsonSerializable(typeof(PinnedOptiScalerRelease))]
+    [JsonSerializable(typeof(List<PinnedOptiScalerRelease>))]
     [JsonSerializable(typeof(ComponentVersions))]
     [JsonSerializable(typeof(InstallationManifest))]
     [JsonSerializable(typeof(ManifestFileRecord))]
@@ -36,6 +41,9 @@ namespace OptiscalerClient.Models
     [JsonSerializable(typeof(List<OptiScalerProfile>))]
     [JsonSerializable(typeof(Dictionary<string, Dictionary<string, string>>))]
     [JsonSerializable(typeof(Dictionary<string, string>))]
+    [JsonSerializable(typeof(CompatibilityEntry))]
+    [JsonSerializable(typeof(List<CompatibilityEntry>))]
+    [JsonSerializable(typeof(CompatibilityCache))]
     internal partial class OptimizerContext : JsonSerializerContext
     {
     }

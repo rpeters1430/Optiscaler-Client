@@ -59,5 +59,11 @@
         { "PathSegment": "Proton BattlEye Runtime" }
     ],
     "SteamGridDBApiKey": "",
-    "Debug": false
+    "Debug": false,
+    "PinnedOptiScalerBetaReleases": [
+        {
+            "Version": "0.9.3-pre2",
+            "DownloadUrl": "https://github.com/rpeters1430/Optiscaler-Client/releases/download/optiscaler-beta-0.9.3-pre2-20260528-007/Optiscaler_0.9.3-pre2_20260528_007.7z"
+        }
+    ]
 }

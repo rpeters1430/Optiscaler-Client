@@ -22,6 +22,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Tests\**\*.cs" />
+    <None Remove="Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Tmds.DBus.Protocol is a Linux-only transitive dep from Avalonia, never executed on Windows -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-xrw6-gwf8-vvr9" />
   </ItemGroup>
@@ -59,7 +64,7 @@
     <PackageReference Include="Avalonia.Diagnostics" Version="11.3.12" Condition="'$(Configuration)'=='Debug'" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
-    <PackageReference Include="SharpCompress" Version="0.44.5" />
+    <PackageReference Include="SharpCompress" Version="0.49.1" />
     <PackageReference Include="System.Management" Version="10.0.0" />
   </ItemGroup>
 
@@ -67,6 +72,9 @@
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Optiscaler-Client.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>OptiscalerClient.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

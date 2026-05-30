@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Tmds.DBus.Protocol is a Linux-only transitive dependency from Avalonia, never executed by these model tests. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-xrw6-gwf8-vvr9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OptiscalerClient.csproj" />
+  </ItemGroup>
+</Project>

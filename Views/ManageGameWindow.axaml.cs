@@ -73,6 +73,8 @@ namespace OptiscalerClient.Views
         private static Dictionary<string, string>? _dlssVersionMap;
         private static Dictionary<string, string>? _xessVersionMap;
 
+        private CompatibilityEntry? _compatibilityEntry;
+
         private void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);
@@ -216,6 +218,7 @@ namespace OptiscalerClient.Views
             };
 
             _ = LoadVersionsAsync();
+            _ = LoadCompatibilityAsync();
         }
 
         private static ComboBoxItem BuildVersionItem(string ver, bool isBeta, bool isLatest)
@@ -1268,16 +1271,22 @@ namespace OptiscalerClient.Views
                     {
                         var inProgressFmt2 = GetResourceString("TxtDownloadInProgressFormat", "A download is already in progress for v{0}.");
                         await ShowToastAsync(string.Format(inProgressFmt2, vex.Version));
+                        return;
                     }
                     else
                     {
-                        var title = GetResourceString("TxtError", "Error");
-                        var msg = GetResourceString(
-                            "TxtVersionUnavailable",
-                            "Cannot install OptiScaler v{0} right now.\n\nCheck your internet connection and try again later.");
-                        await new ConfirmDialog(this, title, string.Format(msg, vex.Version)).ShowDialog<object>(this);
+                        var importedVersion = await OptiScalerArchiveImportHelper.PromptAndImportAsync(
+                            this,
+                            componentService,
+                            vex.Version,
+                            vex.Message);
+
+                        if (string.IsNullOrEmpty(importedVersion))
+                            return;
+
+                        optiscalerVersion = importedVersion;
+                        optiCacheDir = componentService.GetOptiScalerCachePath(importedVersion);
                     }
-                    return;
                 }
                 catch (Exception ex)
                 {
@@ -1286,10 +1295,17 @@ namespace OptiscalerClient.Views
                     {
                         if (bdProgress != null) bdProgress.IsVisible = false;
                     });
-                    var msgFormat = GetResourceString("TxtDownloadErrorPrefix", "Failed to download OptiScaler: {0}");
-                    var title = GetResourceString("TxtError", "Error");
-                    await new ConfirmDialog(this, title, string.Format(msgFormat, ex.Message)).ShowDialog<Object>(this);
-                    return;
+                    var importedVersion = await OptiScalerArchiveImportHelper.PromptAndImportAsync(
+                        this,
+                        componentService,
+                        optiscalerVersion,
+                        ex.Message);
+
+                    if (string.IsNullOrEmpty(importedVersion))
+                        return;
+
+                    optiscalerVersion = importedVersion;
+                    optiCacheDir = componentService.GetOptiScalerCachePath(importedVersion);
                 }
                 finally
                 {
@@ -2216,6 +2232,207 @@ namespace OptiscalerClient.Views
         private string GetResourceString(string key, string fallback)
         {
             return Application.Current?.TryFindResource(key, out var res) == true && res is string str ? str : fallback;
+        }
+
+        // ── Compatibility ─────────────────────────────────────────────────────
+
+        private async Task LoadCompatibilityAsync()
+        {
+            try
+            {
+                var service = new CompatibilityService();
+                var entries = await service.GetEntriesAsync().ConfigureAwait(false);
+                var entry = service.FindEntry(_game.Name, entries);
+                await Dispatcher.UIThread.InvokeAsync(() => UpdateCompatibilityUI(entry));
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log($"[Compat] Load failed: {ex.Message}");
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var loading = this.FindControl<TextBlock>("TxtCompatLoading");
+                    if (loading != null) loading.IsVisible = false;
+                });
+            }
+        }
+
+        private void UpdateCompatibilityUI(CompatibilityEntry? entry)
+        {
+            var loading = this.FindControl<TextBlock>("TxtCompatLoading");
+            var found = this.FindControl<StackPanel>("PnlCompatFound");
+            var notFound = this.FindControl<TextBlock>("TxtCompatNotFound");
+            var wikiBtn = this.FindControl<Button>("BtnCompatWiki");
+            var applyBtn = this.FindControl<Button>("BtnCompatApply");
+
+            if (loading != null) loading.IsVisible = false;
+
+            if (entry == null)
+            {
+                if (notFound != null) notFound.IsVisible = true;
+                return;
+            }
+
+            _compatibilityEntry = entry;
+
+            // Status badge
+            var statusBorder = this.FindControl<Border>("BdCompatStatus");
+            var statusText = this.FindControl<TextBlock>("TxtCompatStatus");
+            if (statusBorder != null && statusText != null)
+            {
+                (string label, string fg, string bg) = entry.Status switch
+                {
+                    CompatibilityStatus.Working    => ("✅ Working",     "#76B900", "#1A76B900"),
+                    CompatibilityStatus.NotWorking => ("❌ Not Working", "#E53935", "#1AE53935"),
+                    _                              => ("➖ Partial",      "#F0834A", "#1AF0834A"),
+                };
+                statusText.Text = label;
+                statusText.Foreground = new SolidColorBrush(Color.Parse(fg));
+                statusBorder.Background = new SolidColorBrush(Color.Parse(bg));
+                statusBorder.BorderBrush = new SolidColorBrush(Color.Parse(fg));
+            }
+
+            // Upscaler input chips
+            var inputsList = this.FindControl<ItemsControl>("LstCompatInputs");
+            if (inputsList != null) inputsList.ItemsSource = entry.UpscalerInputs;
+
+            // OptiPatcher badge
+            var optiPatcherBadge = this.FindControl<Border>("BdCompatOptiPatcher");
+            if (optiPatcherBadge != null) optiPatcherBadge.IsVisible = entry.OptiPatcherSupported;
+
+            // Notes
+            var notesText = this.FindControl<TextBlock>("TxtCompatNotes");
+            if (notesText != null && !string.IsNullOrWhiteSpace(entry.Notes))
+            {
+                notesText.Text = entry.Notes;
+                notesText.IsVisible = true;
+            }
+
+            // Wiki button — only when there's a named page to link to
+            if (wikiBtn != null && !string.IsNullOrWhiteSpace(entry.WikiSlug))
+                wikiBtn.IsVisible = true;
+
+            // Apply Settings button — only when INI settings were extracted
+            if (applyBtn != null && entry.ExtractedIniSettings.Count > 0)
+                applyBtn.IsVisible = true;
+
+            if (found != null) found.IsVisible = true;
+        }
+
+        private void BtnCompatWiki_Click(object? sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_compatibilityEntry?.WikiSlug)) return;
+            var url = $"https://github.com/optiscaler/OptiScaler/wiki/{_compatibilityEntry.WikiSlug}";
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch (Exception ex) { DebugWindow.Log($"[Compat] Could not open wiki URL: {ex.Message}"); }
+        }
+
+        private void BtnCompatApply_Click(object? sender, RoutedEventArgs e)
+        {
+            if (_compatibilityEntry == null || _compatibilityEntry.ExtractedIniSettings.Count == 0) return;
+
+            var settingsList = this.FindControl<ItemsControl>("LstCompatSettings");
+            if (settingsList != null)
+                settingsList.ItemsSource = _compatibilityEntry.ExtractedIniSettings
+                    .Select(kv => $"{kv.Key} = {kv.Value}")
+                    .ToList();
+
+            var modal = this.FindControl<Grid>("BdCompatApplyModal");
+            if (modal != null) modal.IsVisible = true;
+        }
+
+        private void BtnCompatApplyCancel_Click(object? sender, RoutedEventArgs e)
+        {
+            var modal = this.FindControl<Grid>("BdCompatApplyModal");
+            if (modal != null) modal.IsVisible = false;
+        }
+
+        private async void BtnCompatApplyCreate_Click(object? sender, RoutedEventArgs e)
+        {
+            var modal = this.FindControl<Grid>("BdCompatApplyModal");
+            if (modal != null) modal.IsVisible = false;
+            if (_compatibilityEntry == null) return;
+
+            try
+            {
+                var profileService = new ProfileManagementService();
+                var baseName = $"{_game.Name} Compatibility";
+                var profileName = baseName;
+                var existing = profileService.GetAllProfiles();
+                int counter = 1;
+                while (existing.Any(p => p.Name.Equals(profileName, StringComparison.OrdinalIgnoreCase)))
+                    profileName = $"{baseName} ({counter++})";
+
+                var profile = new OptiScalerProfile
+                {
+                    Name = profileName,
+                    Description = $"Compatibility settings from OptiScaler wiki for {_game.Name}",
+                    IsBuiltIn = false,
+                    CreatedBy = "Compatibility Import",
+                    CreatedDate = DateTime.Now,
+                    IniSettings = new Dictionary<string, Dictionary<string, string>>
+                    {
+                        ["Upscalers"] = new Dictionary<string, string>(_compatibilityEntry.ExtractedIniSettings)
+                    }
+                };
+
+                profileService.SaveProfile(profile);
+                var profiles = profileService.GetAllProfiles(forceRefresh: true);
+                PopulateProfileSelector(profileService, profiles, profileName);
+                await ShowToastAsync($"Profile '{profileName}' created.");
+            }
+            catch (Exception ex)
+            {
+                await new ConfirmDialog(this, "Error", $"Failed to create profile:\n{ex.Message}").ShowDialog<object>(this);
+            }
+        }
+
+        private async void BtnCompatApplyMerge_Click(object? sender, RoutedEventArgs e)
+        {
+            var modal = this.FindControl<Grid>("BdCompatApplyModal");
+            if (modal != null) modal.IsVisible = false;
+            if (_compatibilityEntry == null) return;
+
+            var cmbProfile = this.FindControl<ComboBox>("CmbProfile");
+            if (cmbProfile?.SelectedItem is not ComboBoxItem item || item.Tag is not OptiScalerProfile selectedProfile)
+            {
+                await new ConfirmDialog(this, "Error", "No profile selected.").ShowDialog<object>(this);
+                return;
+            }
+
+            try
+            {
+                var profileService = new ProfileManagementService();
+                var target = selectedProfile.Clone();
+                string targetName;
+
+                if (selectedProfile.IsBuiltIn)
+                {
+                    // Cannot overwrite built-in; save as a new derived profile
+                    targetName = $"{_game.Name} Compatibility (from {selectedProfile.Name})";
+                    target.Name = targetName;
+                    target.Description = $"Merged compatibility settings for {_game.Name} based on {selectedProfile.Name}";
+                }
+                else
+                {
+                    targetName = selectedProfile.Name;
+                    target.Name = targetName;
+                }
+
+                if (!target.IniSettings.ContainsKey("Upscalers"))
+                    target.IniSettings["Upscalers"] = new Dictionary<string, string>();
+
+                foreach (var kv in _compatibilityEntry.ExtractedIniSettings)
+                    target.IniSettings["Upscalers"][kv.Key] = kv.Value;
+
+                profileService.SaveProfile(target, isBuiltIn: false);
+                var profiles = profileService.GetAllProfiles(forceRefresh: true);
+                PopulateProfileSelector(profileService, profiles, targetName);
+                await ShowToastAsync($"Settings merged into '{targetName}'.");
+            }
+            catch (Exception ex)
+            {
+                await new ConfirmDialog(this, "Error", $"Failed to merge settings:\n{ex.Message}").ShowDialog<object>(this);
+            }
         }
     }
 }

@@ -194,7 +194,7 @@ public class OptiscalerManagementService
         // Extract with path traversal validation
         try
         {
-            using (var archive = ArchiveFactory.Open(archivePath))
+            using (var archive = ArchiveFactory.OpenArchive(archivePath, new SharpCompress.Readers.ReaderOptions()))
             {
                 foreach (var entry in archive.Entries)
                 {

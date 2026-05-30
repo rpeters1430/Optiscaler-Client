@@ -81,6 +81,15 @@ namespace OptiscalerClient.Models
     }
 
     /// <summary>
+    /// External OptiScaler beta release metadata that is not published through GitHub releases.
+    /// </summary>
+    public class PinnedOptiScalerRelease
+    {
+        public string Version { get; set; } = string.Empty;
+        public string DownloadUrl { get; set; } = string.Empty;
+    }
+
+    /// <summary>
     /// Root configuration containing all repository configurations
     /// </summary>
     public class AppConfiguration
@@ -142,6 +151,19 @@ namespace OptiscalerClient.Models
         /// Each entry corresponds to a subdirectory under Cache/OptiScaler/.
         /// </summary>
         public List<string> CustomOptiScalerVersions { get; set; } = new();
+
+        /// <summary>
+        /// Beta releases supplied outside the configured beta GitHub repository.
+        /// These are merged into the normal OptiScaler version list at startup.
+        /// </summary>
+        public List<PinnedOptiScalerRelease> PinnedOptiScalerBetaReleases { get; set; } = new()
+        {
+            new()
+            {
+                Version = "0.9.3-pre2",
+                DownloadUrl = "https://github.com/rpeters1430/Optiscaler-Client/releases/download/optiscaler-beta-0.9.3-pre2-20260528-007/Optiscaler_0.9.3-pre2_20260528_007.7z",
+            },
+        };
 
         /// <summary>Network and proxy settings.</summary>
         public NetworkConfig Network { get; set; } = new();

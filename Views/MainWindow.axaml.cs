@@ -4506,14 +4506,21 @@ namespace OptiscalerClient.Views
 
                                 HideToast();
 
-                                // Show error dialog
-                                await new ConfirmDialog(
+                                var requestedVersion = downloadEx is VersionUnavailableException versionUnavailable
+                                    ? versionUnavailable.Version
+                                    : versionToInstall;
+                                var importedVersion = await OptiScalerArchiveImportHelper.PromptAndImportAsync(
                                     this,
-                                    GetResourceString("TxtError", "Error"),
-                                    $"Failed to download OptiScaler {versionToInstall}: {downloadEx.Message}",
-                                    isAlert: true
-                                ).ShowDialog<bool>(this);
-                                return;
+                                    _componentService,
+                                    requestedVersion,
+                                    downloadEx.Message);
+
+                                if (string.IsNullOrEmpty(importedVersion))
+                                    return;
+
+                                versionToInstall = importedVersion;
+                                optiCacheDir = _componentService.GetOptiScalerCachePath(importedVersion);
+                                ShowToast(string.Format(GetResourceString("TxtExtractingFormat", "Extracting and installing v{0}..."), versionToInstall), showProgress: true, progressPercent: null);
                             }
                         }
 

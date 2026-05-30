@@ -516,6 +516,54 @@ public partial class BulkInstallWindow : Window
         if (btnCancel != null) btnCancel.IsEnabled = false;
         if (progressSection != null) progressSection.IsVisible = true;
 
+        var optiCacheDir = _componentService.GetOptiScalerCachePath(version);
+        if (!System.IO.Directory.Exists(optiCacheDir) ||
+            System.IO.Directory.GetFiles(optiCacheDir, "*.*", System.IO.SearchOption.AllDirectories).Length == 0)
+        {
+            if (txtProgressStatus != null)
+                txtProgressStatus.Text = $"Downloading OptiScaler {version}...";
+
+            try
+            {
+                var downloadProgress = new Progress<double>(p =>
+                    Dispatcher.UIThread.Post(() => { if (progressBar != null) progressBar.Value = p; }));
+                optiCacheDir = await _componentService.DownloadOptiScalerAsync(version, downloadProgress);
+            }
+            catch (Exception ex)
+            {
+                if (ex is VersionUnavailableException vex &&
+                    vex.Message.Contains("Download already in progress", StringComparison.OrdinalIgnoreCase))
+                {
+                    await new ConfirmDialog(this, "Download In Progress", $"A download is already in progress for v{vex.Version}.", isAlert: true)
+                        .ShowDialog<bool>(this);
+                    _isInstalling = false;
+                    if (btnInstall != null) btnInstall.IsEnabled = true;
+                    if (btnCancel != null) btnCancel.IsEnabled = true;
+                    return;
+                }
+
+                var requestedVersion = ex is VersionUnavailableException versionUnavailable
+                    ? versionUnavailable.Version
+                    : version;
+                var importedVersion = await OptiScalerArchiveImportHelper.PromptAndImportAsync(
+                    this,
+                    _componentService,
+                    requestedVersion,
+                    ex.Message);
+
+                if (string.IsNullOrEmpty(importedVersion))
+                {
+                    _isInstalling = false;
+                    if (btnInstall != null) btnInstall.IsEnabled = true;
+                    if (btnCancel != null) btnCancel.IsEnabled = true;
+                    return;
+                }
+
+                version = importedVersion;
+                optiCacheDir = _componentService.GetOptiScalerCachePath(importedVersion);
+            }
+        }
+
         int totalGames = selectedGames.Count;
         int currentGame = 0;
 
@@ -535,7 +583,6 @@ public partial class BulkInstallWindow : Window
             try
             {
                 // Get cache paths
-                var optiCacheDir = _componentService.GetOptiScalerCachePath(version);
                 var fakeCacheDir = installFakenvapi
                     ? _componentService.GetFakenvapiCachePath(selectedFakenvapiVersion!)
                     : "";
