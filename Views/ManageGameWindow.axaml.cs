@@ -739,17 +739,79 @@ namespace OptiscalerClient.Views
 
         private void CheckIfAntiCheat()
         {
-            const string anticheatName = "start_protected_game.exe";
             var anticheatPanel = this.FindControl<Border>("EasyAntiCheat");
+            if (anticheatPanel == null) return;
 
-            bool antiCheatFound = !string.IsNullOrEmpty(_game?.InstallPath) &&
-                         File.Exists(System.IO.Path.Combine(_game.InstallPath, anticheatName));
-
-            if (anticheatPanel != null)
+            if (string.IsNullOrEmpty(_game?.InstallPath) || !Directory.Exists(_game.InstallPath))
             {
-                anticheatPanel.IsVisible = antiCheatFound;
-                anticheatPanel.IsEnabled = antiCheatFound;
+                anticheatPanel.IsVisible = false;
+                return;
             }
+
+            // Common anti-cheat file and directory names
+            var antiCheatIndicators = new[]
+            {
+                "start_protected_game.exe",  // EAC Launcher (Elden Ring, etc.)
+                "EasyAntiCheat",             // EAC directory
+                "EasyAntiCheat.dll",         // EAC DLL
+                "EasyAntiCheat_x64.dll",     // EAC DLL 64-bit
+                "BattlEye",                  // BE directory
+                "BEClient_x64.dll",          // BE DLL
+                "BEService.exe",             // BE service
+                "vgclient.exe",              // Vanguard client
+                "Equ8",                      // Equ8 directory
+                "EQU8_Client.dll"            // Equ8 DLL
+            };
+
+            bool antiCheatFound = false;
+
+            try
+            {
+                // 1. Direct file/directory checks in the game root
+                foreach (var indicator in antiCheatIndicators)
+                {
+                    var fullPath = System.IO.Path.Combine(_game.InstallPath, indicator);
+                    if (File.Exists(fullPath) || Directory.Exists(fullPath))
+                    {
+                        antiCheatFound = true;
+                        break;
+                    }
+                }
+
+                // 2. Scan immediate subdirectories (1 level deep) for any occurrences of EAC/BE files
+                if (!antiCheatFound)
+                {
+                    var subdirs = Directory.GetDirectories(_game.InstallPath);
+                    foreach (var subdir in subdirs)
+                    {
+                        var dirName = System.IO.Path.GetFileName(subdir);
+                        if (dirName.Equals("EasyAntiCheat", StringComparison.OrdinalIgnoreCase) ||
+                            dirName.Equals("BattlEye", StringComparison.OrdinalIgnoreCase))
+                        {
+                            antiCheatFound = true;
+                            break;
+                        }
+
+                        // Check common DLLs inside the subdirectory
+                        foreach (var fileToCheck in new[] { "EasyAntiCheat.dll", "EasyAntiCheat_x64.dll", "BEClient_x64.dll" })
+                        {
+                            if (File.Exists(System.IO.Path.Combine(subdir, fileToCheck)))
+                            {
+                                antiCheatFound = true;
+                                break;
+                            }
+                        }
+                        if (antiCheatFound) break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log($"[AntiCheatCheck] Error scanning for anti-cheat: {ex.Message}");
+            }
+
+            anticheatPanel.IsVisible = antiCheatFound;
+            anticheatPanel.IsEnabled = antiCheatFound;
         }
 
         private void UpdateCheckboxStatesForVersion(ComboBox? cmb)
@@ -1619,6 +1681,49 @@ namespace OptiscalerClient.Views
             if (btnUninstall != null) btnUninstall.IsEnabled = false;
         }
 
+        private void BtnViewLogs_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string? gameDir = null;
+                var storeKey = _game.InstallPath;
+                var backupStore = new BackupStoreService();
+                var manifest = backupStore.HasValidBackup(storeKey) ? backupStore.LoadManifest(storeKey) : null;
+                if (manifest?.InstalledGameDirectory != null && Directory.Exists(manifest.InstalledGameDirectory))
+                {
+                    gameDir = manifest.InstalledGameDirectory;
+                }
+                
+                if (string.IsNullOrEmpty(gameDir) && !string.IsNullOrEmpty(_game.ExecutablePath) && File.Exists(_game.ExecutablePath))
+                {
+                    gameDir = System.IO.Path.GetDirectoryName(_game.ExecutablePath);
+                }
+
+                if (string.IsNullOrEmpty(gameDir))
+                {
+                    var installService = new GameInstallationService();
+                    gameDir = installService.DetermineInstallDirectory(_game);
+                }
+
+                if (string.IsNullOrEmpty(gameDir))
+                {
+                    gameDir = _game.InstallPath;
+                }
+
+                if (string.IsNullOrEmpty(gameDir) || !Directory.Exists(gameDir))
+                {
+                    return;
+                }
+
+                var logWindow = new LogViewerWindow(this, gameDir, _game.Name);
+                logWindow.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                DebugWindow.Log($"[ManageGame] Open logs failed: {ex.Message}");
+            }
+        }
+
         private void BtnFolderCleanup_Click(object sender, RoutedEventArgs e)
         {
             // Reset all sensitive checkboxes to unchecked every time the dialog opens.
@@ -1897,6 +2002,7 @@ namespace OptiscalerClient.Views
             var btnInstallManual = this.FindControl<Button>("BtnInstallManual");
             var btnUninstall = this.FindControl<Button>("BtnUninstall");
             var btnFolderCleanup = this.FindControl<Button>("BtnFolderCleanup");
+            var btnViewLogs = this.FindControl<Button>("BtnViewLogs");
             var installBtnGroup = this.FindControl<StackPanel>("InstallBtnGroup");
             var pnlInstallOptions = this.FindControl<StackPanel>("PnlInstallOptions");
 
@@ -1930,6 +2036,7 @@ namespace OptiscalerClient.Views
                 if (installBtnGroup != null) installBtnGroup.IsVisible = true;
                 if (pnlInstallOptions != null) pnlInstallOptions.IsVisible = true;
                 if (btnUninstall != null) btnUninstall.IsVisible = true;
+                if (btnViewLogs != null) btnViewLogs.IsVisible = true;
             }
             else
             {
@@ -1951,6 +2058,7 @@ namespace OptiscalerClient.Views
                 if (installBtnGroup != null) installBtnGroup.IsVisible = true;
                 if (pnlInstallOptions != null) pnlInstallOptions.IsVisible = true;
                 if (btnUninstall != null) btnUninstall.IsVisible = false;
+                if (btnViewLogs != null) btnViewLogs.IsVisible = false;
             }
         }
 

@@ -1,4 +1,4 @@
-﻿// OptiScaler Client - A frontend for managing OptiScaler installations
+// OptiScaler Client - A frontend for managing OptiScaler installations
 // Copyright (C) 2026 Agustín Montaña (Agustinm28)
 //
 // This program is free software: you can redistribute it and/or modify
@@ -24,8 +24,23 @@ public class GamePersistenceService
 {
     private readonly string _filePath;
 
-    public GamePersistenceService()
+    public GamePersistenceService() : this(null)
     {
+    }
+
+    public GamePersistenceService(string? customFilePath)
+    {
+        if (customFilePath != null)
+        {
+            _filePath = customFilePath;
+            var parentDir = Path.GetDirectoryName(customFilePath);
+            if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+            {
+                Directory.CreateDirectory(parentDir);
+            }
+            return;
+        }
+
         // Guardamos en AppData para ser correctos con los permisos de usuario
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var folder = Path.Combine(appData, "OptiscalerClient");

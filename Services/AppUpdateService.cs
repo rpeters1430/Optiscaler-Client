@@ -349,7 +349,10 @@ rm -- ""$0""
             }
 
             Process.Start(psi);
-            // Avalonia UI TODO: System.Windows.Application.Current.Shutdown();
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                desktop.Shutdown();
+            }
         }
     }
 }

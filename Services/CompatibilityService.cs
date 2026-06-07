@@ -94,33 +94,83 @@ namespace OptiscalerClient.Services
 
         // ── Parsing ──────────────────────────────────────────────────────────
 
-        private static List<CompatibilityEntry> ParseCompatibilityTable(string markdown)
+        internal static List<CompatibilityEntry> ParseCompatibilityTable(string markdown)
         {
             var entries = new List<CompatibilityEntry>();
-            bool separatorSeen = false;
+
+            // Default column indices for the main table (fallback)
+            int gameColIdx = 1;
+            int statusColIdx = 2;
+            int inputsColIdx = 3;
+            int optiPatcherColIdx = 4;
+            int notesColIdx = 5;
+
+            string lastLine = "";
 
             foreach (var rawLine in markdown.Split('\n'))
             {
                 var line = rawLine.Trim();
-                if (!line.StartsWith("|")) continue;
-
-                if (IsSeparatorRow(line))
+                if (!line.StartsWith("|"))
                 {
-                    separatorSeen = true;
+                    lastLine = line;
                     continue;
                 }
 
-                if (!separatorSeen) continue;
+                if (IsSeparatorRow(line))
+                {
+                    // The line before this separator was the header row!
+                    if (!string.IsNullOrWhiteSpace(lastLine) && lastLine.StartsWith("|"))
+                    {
+                        var headerCells = lastLine.Split('|');
+                        for (int i = 1; i < headerCells.Length - 1; i++)
+                        {
+                            var header = headerCells[i].Trim().ToLowerInvariant();
+                            if (header.Contains("game"))
+                            {
+                                gameColIdx = i;
+                            }
+                            else if (header.Contains("compatibility") || header.Contains("status"))
+                            {
+                                statusColIdx = i;
+                            }
+                            else if (header.Contains("input"))
+                            {
+                                inputsColIdx = i;
+                            }
+                            else if (header.Contains("optipatcher"))
+                            {
+                                optiPatcherColIdx = i;
+                            }
+                            else if (header.Contains("notes"))
+                            {
+                                notesColIdx = i;
+                            }
+                        }
+                    }
+                    lastLine = line;
+                    continue;
+                }
 
                 var cells = line.Split('|');
-                // cells[0] and cells[last] are empty; data is cells[1..n-2]
-                if (cells.Length < 6) continue;
+                // Minimum cells length: game, status/compatibility, inputs.
+                if (cells.Length < 5)
+                {
+                    lastLine = line;
+                    continue;
+                }
 
-                var gameCell = cells[1].Trim();
-                var statusCell = cells[2].Trim();
-                var inputsCell = cells[3].Trim();
-                var optiPatcherCell = cells[4].Trim();
-                var notesCell = cells.Length > 5 ? cells[5].Trim() : "";
+                // If this row is the header itself, skip it
+                if (gameColIdx < cells.Length && cells[gameColIdx].Trim().Equals("Game", StringComparison.OrdinalIgnoreCase))
+                {
+                    lastLine = line;
+                    continue;
+                }
+
+                var gameCell = gameColIdx < cells.Length ? cells[gameColIdx].Trim() : "";
+                var statusCell = statusColIdx < cells.Length ? cells[statusColIdx].Trim() : "";
+                var inputsCell = inputsColIdx < cells.Length ? cells[inputsColIdx].Trim() : "";
+                var optiPatcherCell = optiPatcherColIdx >= 0 && optiPatcherColIdx < cells.Length ? cells[optiPatcherColIdx].Trim() : "";
+                var notesCell = notesColIdx >= 0 && notesColIdx < cells.Length ? cells[notesColIdx].Trim() : "";
 
                 // Parse game name and optional wiki slug
                 string gameName;
@@ -136,9 +186,13 @@ namespace OptiscalerClient.Services
                     gameName = StripMarkdown(gameCell).Trim();
                 }
 
-                if (string.IsNullOrWhiteSpace(gameName)) continue;
+                if (string.IsNullOrWhiteSpace(gameName) || gameName.Equals("Game", StringComparison.OrdinalIgnoreCase))
+                {
+                    lastLine = line;
+                    continue;
+                }
 
-                var status = statusCell.Contains("✅") ? CompatibilityStatus.Working
+                var status = statusCell.Contains("✅") || statusCell.Contains("✔️") ? CompatibilityStatus.Working
                     : statusCell.Contains("❌") ? CompatibilityStatus.NotWorking
                     : CompatibilityStatus.Partial;
 
@@ -147,7 +201,7 @@ namespace OptiscalerClient.Services
                     .Where(s => !string.IsNullOrWhiteSpace(s))
                     .ToList();
 
-                bool optiPatcher = optiPatcherCell.Contains("✨");
+                bool optiPatcher = optiPatcherCell.Contains("✨") || optiPatcherCell.Contains("Yes") || optiPatcherCell.Contains("✅");
                 var notes = StripMarkdown(notesCell).Trim();
                 var iniSettings = ExtractIniSettings(notesCell);
 
@@ -161,6 +215,8 @@ namespace OptiscalerClient.Services
                     Notes = notes,
                     ExtractedIniSettings = iniSettings
                 });
+
+                lastLine = line;
             }
 
             return entries;
@@ -194,13 +250,13 @@ namespace OptiscalerClient.Services
             return text.Trim();
         }
 
-        private static Dictionary<string, string> ExtractIniSettings(string rawCell)
+        internal static Dictionary<string, string> ExtractIniSettings(string rawCell)
         {
             var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             // Strip markdown emphasis/code markers but keep the text
             var stripped = Regex.Replace(rawCell, @"\*\*|`", "");
-            // Match patterns like KEY=value where key starts with a letter
-            var matches = Regex.Matches(stripped, @"(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*)=([A-Za-z0-9_.]+)(?![A-Za-z0-9_])");
+            // Match patterns like KEY = value where key starts with a letter and optional spaces/signs are allowed, avoiding trailing sentence punctuation and URL parameters
+            var matches = Regex.Matches(stripped, @"(?<![A-Za-z0-9_?&/:\\])([A-Za-z][A-Za-z0-9_]*)\s*=\s*([-+]?[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)(?![A-Za-z0-9_])");
             foreach (Match m in matches)
             {
                 var key = m.Groups[1].Value;
@@ -214,14 +270,14 @@ namespace OptiscalerClient.Services
 
         // ── Fuzzy matching ────────────────────────────────────────────────────
 
-        private static string NormalizeName(string name)
+        internal static string NormalizeName(string name)
         {
             // Lowercase, strip non-alphanumeric, collapse spaces
             var result = Regex.Replace(name.ToLowerInvariant(), @"[^a-z0-9 ]", " ");
             return Regex.Replace(result, @"\s+", " ").Trim();
         }
 
-        private static int LevenshteinDistance(string a, string b)
+        internal static int LevenshteinDistance(string a, string b)
         {
             // Cap to avoid quadratic cost on very long strings
             if (a.Length > 60) a = a[..60];

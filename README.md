@@ -1,4 +1,4 @@
-﻿# ✦ OptiScaler Client
+# ✦ OptiScaler Client
 
 [![GitHub Release](https://img.shields.io/github/v/release/Agustinm28/Optiscaler-Client?style=flat-square&color=8A2BE2)](https://github.com/Agustinm28/Optiscaler-Client/releases/tag/OptiscalerClient-1.0.5)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-yellow.svg?style=flat-square)](LICENSE)
@@ -139,17 +139,46 @@ Full interface translation in **14 languages**:
 ### Platform Support
 
 - Windows
-- Linux
+- Linux (SteamOS / Steam Deck, CachyOS, Arch, Ubuntu, etc.)
 
 ### Instructions
 
-1. Download the latest release asset from [Releases](https://github.com/Agustinm28/Optiscaler-Client/releases).
+#### Windows
+1. Download the latest Windows release asset from [Releases](https://github.com/Agustinm28/Optiscaler-Client/releases).
 2. Extract the package.
 3. Run `OptiscalerClient.exe`.
 
+#### Linux (including CachyOS and Steam Deck)
+1. Download the latest Linux release asset (`linux-x64`) from [Releases](https://github.com/Agustinm28/Optiscaler-Client/releases).
+2. Extract the package.
+3. Open a terminal in the extracted folder.
+4. Mark the binary as executable:
+   ```sh
+   chmod +x OptiscalerClient
+   ```
+5. Run the client:
+   ```sh
+   ./OptiscalerClient
+   ```
+
+### Build from Source
+
+If you prefer to compile the client yourself, install the .NET 10.0 SDK and run:
+
+* **Windows**:
+  ```sh
+  dotnet publish -c Release -r win-x64
+  ```
+* **Linux**:
+  ```sh
+  chmod +x build-linux.sh
+  ./build-linux.sh
+  ```
+  *(Or run manually: `dotnet publish -c Release -r linux-x64 --self-contained`)*
+
 ### Notes
 
-- The app is self-contained, so no external .NET runtime installation is required.
+- The app is self-contained when published in release mode, so no external .NET runtime installation is required to run the compiled binaries.
 - On Linux, automatic scanner sources are focused on Steam libraries.
 - Manual add/install flows currently target executable files (`.exe`) for game selection.
 

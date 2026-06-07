@@ -592,13 +592,22 @@
 
                                 <!-- Row 4, all columns : Install buttons right-aligned, Cleanup left-aligned -->
                                 <Grid Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3">
-                                    <!-- Cleanup button — left side -->
-                                    <Button Name="BtnFolderCleanup"
-                                            Content="{DynamicResource TxtFolderCleanup}"
-                                            Classes="BtnBase"
-                                            Padding="14,7"
-                                            HorizontalAlignment="Left"
-                                            Click="BtnFolderCleanup_Click"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Left">
+                                        <!-- Cleanup button — left side -->
+                                        <Button Name="BtnFolderCleanup"
+                                                Content="{DynamicResource TxtFolderCleanup}"
+                                                Classes="BtnBase"
+                                                Padding="14,7"
+                                                Click="BtnFolderCleanup_Click"/>
+
+                                        <!-- View Logs button -->
+                                        <Button Name="BtnViewLogs"
+                                                Content="View Logs"
+                                                Classes="BtnBase"
+                                                Padding="14,7"
+                                                IsVisible="False"
+                                                Click="BtnViewLogs_Click"/>
+                                    </StackPanel>
 
                                     <!-- Install buttons — right side -->
                                     <StackPanel Name="InstallBtnGroup"
