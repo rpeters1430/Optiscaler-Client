@@ -96,6 +96,7 @@ jobs:
         with:
           name: release-notes
           path: release_body.md
+          retention-days: 1
 
   build:
     needs: prepare
@@ -135,6 +136,7 @@ jobs:
         with:
           name: dist
           path: dist/*
+          retention-days: 1
 
   nix-build:
     needs: prepare
